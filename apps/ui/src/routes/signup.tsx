@@ -40,7 +40,11 @@ function RouteComponent() {
 	const navigate = useNavigate();
 	const [isLoading, setIsLoading] = useState(false);
 	const { signUp } = useAuth();
-	useUser({ redirectTo: "/dashboard", redirectWhen: "authenticated" });
+	useUser({
+		redirectTo: "/dashboard",
+		redirectWhen: "authenticated",
+		checkOnboarding: true,
+	});
 
 	useEffect(() => {
 		posthog.capture("page_viewed_signup");
@@ -75,7 +79,11 @@ function RouteComponent() {
 						email: values.email,
 						name: values.name,
 					});
-					toast({ title: "Account created", description: "Welcome!" });
+					toast({
+						title: "Account created",
+						description:
+							"Please check your email to verify your account before signing in.",
+					});
 					navigate({ to: "/onboarding" });
 				},
 				onError: (ctx) => {

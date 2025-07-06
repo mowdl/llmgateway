@@ -161,6 +161,8 @@ export interface paths {
 								id: string;
 								email: string;
 								name: string | null;
+								onboardingCompleted: boolean;
+								emailVerified: boolean;
 							};
 						};
 					};
@@ -243,6 +245,8 @@ export interface paths {
 								id: string;
 								email: string;
 								name: string | null;
+								onboardingCompleted: boolean;
+								emailVerified: boolean;
 							};
 							message: string;
 						};
@@ -373,6 +377,76 @@ export interface paths {
 			};
 		};
 		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/user/me/complete-onboarding": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: {
+				content: {
+					"application/json": Record<string, never>;
+				};
+			};
+			responses: {
+				/** @description Onboarding completed successfully. */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": {
+							user: {
+								id: string;
+								email: string;
+								name: string | null;
+								onboardingCompleted: boolean;
+								emailVerified: boolean;
+							};
+							message: string;
+						};
+					};
+				};
+				/** @description Unauthorized. */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": {
+							message: string;
+						};
+					};
+				};
+				/** @description User not found. */
+				404: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": {
+							message: string;
+						};
+					};
+				};
+			};
+		};
 		delete?: never;
 		options?: never;
 		head?: never;
