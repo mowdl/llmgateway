@@ -52,10 +52,10 @@ const DEFAULT_TOKENIZER_MODEL = "gpt-4";
 /**
  * Determines the appropriate finish reason based on HTTP status code
  * 5xx status codes indicate upstream provider errors
- * 4xx status codes indicate client/gateway errors
+ * 4xx status codes indicate user errors (client-side issues)
  */
 function getFinishReasonForError(statusCode: number): string {
-	return statusCode >= 500 ? "upstream_error" : "gateway_error";
+	return statusCode >= 500 ? "upstream_error" : "user_error";
 }
 
 /**

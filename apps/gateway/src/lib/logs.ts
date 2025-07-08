@@ -25,6 +25,9 @@ export function getUnifiedFinishReason(
 	if (finishReason === "upstream_error") {
 		return UnifiedFinishReason.UPSTREAM_ERROR;
 	}
+	if (finishReason === "user_error") {
+		return UnifiedFinishReason.USER_ERROR;
+	}
 
 	switch (provider) {
 		case "anthropic":

@@ -19,6 +19,7 @@ export const UnifiedFinishReason = {
 	CONTENT_FILTER: "content_filter",
 	GATEWAY_ERROR: "gateway_error",
 	UPSTREAM_ERROR: "upstream_error",
+	USER_ERROR: "user_error",
 	CANCELED: "canceled",
 	UNKNOWN: "unknown",
 } as const;

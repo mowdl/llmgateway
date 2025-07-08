@@ -50,6 +50,9 @@ describe("getUnifiedFinishReason", () => {
 		expect(getUnifiedFinishReason("upstream_error", "any-provider")).toBe(
 			UnifiedFinishReason.UPSTREAM_ERROR,
 		);
+		expect(getUnifiedFinishReason("user_error", "any-provider")).toBe(
+			UnifiedFinishReason.USER_ERROR,
+		);
 		expect(getUnifiedFinishReason(null, "any-provider")).toBe(
 			UnifiedFinishReason.UNKNOWN,
 		);
