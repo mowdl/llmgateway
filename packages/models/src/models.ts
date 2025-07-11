@@ -61,6 +61,14 @@ export interface ProviderModelMapping {
 	 * Test skip/only functionality
 	 */
 	test?: "skip" | "only";
+	/**
+	 * Dynamic pricing configuration for context-size-based pricing
+	 */
+	dynamicPricing?: {
+		contextThreshold: number;
+		higherTierInputPrice: number;
+		higherTierOutputPrice: number;
+	};
 }
 
 export interface ModelDefinition {

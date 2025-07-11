@@ -2140,6 +2140,7 @@ chat.openapi(completions, async (c) => {
 						prompt: messages.map((m) => m.content).join("\n"),
 						completion: fullContent,
 					},
+					calculatedPromptTokens || undefined,
 				);
 
 				const baseLogEntry = createLogEntry(
@@ -2386,6 +2387,7 @@ chat.openapi(completions, async (c) => {
 			prompt: messages.map((m) => m.content).join("\n"),
 			completion: content,
 		},
+		calculatedPromptTokens || undefined,
 	);
 
 	const baseLogEntry = createLogEntry(

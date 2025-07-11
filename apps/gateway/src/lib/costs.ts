@@ -1,4 +1,9 @@
-import { type Model, type ModelDefinition, models } from "@llmgateway/models";
+import {
+	type Model,
+	type ModelDefinition,
+	models,
+	type ProviderModelMapping,
+} from "@llmgateway/models";
 import { encode, encodeChat } from "gpt-tokenizer";
 
 // Define ChatMessage type to match what gpt-tokenizer expects
@@ -26,6 +31,7 @@ export function calculateCosts(
 		prompt?: string;
 		completion?: string;
 	},
+	contextSize?: number,
 ) {
 	// Find the model info - try both base model name and provider model name
 	let modelInfo = models.find((m) => m.model === model) as ModelDefinition;
@@ -128,10 +134,20 @@ export function calculateCosts(
 		};
 	}
 
-	const inputPrice = providerInfo.inputPrice || 0;
-	const outputPrice = providerInfo.outputPrice || 0;
+	let inputPrice = providerInfo.inputPrice || 0;
+	let outputPrice = providerInfo.outputPrice || 0;
 	const cachedInputPrice = providerInfo.cachedInputPrice || 0;
 	const requestPrice = providerInfo.requestPrice || 0;
+
+	const generalProviderInfo = providerInfo as ProviderModelMapping;
+	// Check for dynamic pricing based on context size
+	if (generalProviderInfo.dynamicPricing && contextSize !== undefined) {
+		const dynamicPricing = generalProviderInfo.dynamicPricing;
+		if (contextSize > dynamicPricing.contextThreshold) {
+			inputPrice = dynamicPricing.higherTierInputPrice;
+			outputPrice = dynamicPricing.higherTierOutputPrice;
+		}
+	}
 
 	const inputCost = calculatedPromptTokens * inputPrice;
 	const outputCost = calculatedCompletionTokens * outputPrice;
