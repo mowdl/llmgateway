@@ -16,6 +16,25 @@ export type Provider = (typeof providers)[number]["id"];
 
 export type Model = (typeof models)[number]["providers"][number]["modelName"];
 
+export interface PricingTier {
+	/**
+	 * Minimum context size for this pricing tier (inclusive)
+	 */
+	minContextSize: number;
+	/**
+	 * Maximum context size for this pricing tier (inclusive)
+	 */
+	maxContextSize: number;
+	/**
+	 * Price per input token in USD for this tier
+	 */
+	inputPrice: number;
+	/**
+	 * Price per output token in USD for this tier
+	 */
+	outputPrice: number;
+}
+
 export interface ProviderModelMapping {
 	providerId: (typeof providers)[number]["id"];
 	modelName: string;
@@ -27,6 +46,10 @@ export interface ProviderModelMapping {
 	 * Price per output token in USD
 	 */
 	outputPrice?: number;
+	/**
+	 * Dynamic pricing tiers based on context size
+	 */
+	pricingTiers?: PricingTier[];
 	/**
 	 * Price per cached input token in USD
 	 */

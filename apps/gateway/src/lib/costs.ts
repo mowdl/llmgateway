@@ -128,8 +128,28 @@ export function calculateCosts(
 		};
 	}
 
-	const inputPrice = providerInfo.inputPrice || 0;
-	const outputPrice = providerInfo.outputPrice || 0;
+	// Calculate prices based on pricing tiers if available
+	let inputPrice = providerInfo.inputPrice || 0;
+	let outputPrice = providerInfo.outputPrice || 0;
+
+	if (providerInfo.pricingTiers && providerInfo.pricingTiers.length > 0) {
+		// Calculate total context size for tier selection
+		const totalContextSize =
+			calculatedPromptTokens + calculatedCompletionTokens;
+
+		// Find the appropriate pricing tier based on context size
+		const applicableTier = providerInfo.pricingTiers.find(
+			(tier) =>
+				totalContextSize >= tier.minContextSize &&
+				totalContextSize <= tier.maxContextSize,
+		);
+
+		if (applicableTier) {
+			inputPrice = applicableTier.inputPrice;
+			outputPrice = applicableTier.outputPrice;
+		}
+	}
+
 	const cachedInputPrice = providerInfo.cachedInputPrice || 0;
 	const requestPrice = providerInfo.requestPrice || 0;
 

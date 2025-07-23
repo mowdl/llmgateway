@@ -91,4 +91,44 @@ describe("calculateCosts", () => {
 		expect(result.cachedTokens).toBe(20);
 		expect(result.estimatedCost).toBe(false); // Not estimated
 	});
+
+	it("should calculate costs using pricing tiers based on context size", () => {
+		// Test qwen3-coder-plus with different context sizes
+
+		// Small context (0-32K): should use first tier ($1/$5 per million)
+		const smallResult = calculateCosts(
+			"qwen3-coder-plus",
+			"alibaba",
+			15000,
+			5000,
+			null,
+		);
+		expect(smallResult.inputCost).toBeCloseTo(0.015); // 15000 * (1/1e6)
+		expect(smallResult.outputCost).toBeCloseTo(0.025); // 5000 * (5/1e6)
+		expect(smallResult.totalCost).toBeCloseTo(0.04); // 0.015 + 0.025
+
+		// Medium context (32K-128K): should use second tier ($1.8/$9 per million)
+		const mediumResult = calculateCosts(
+			"qwen3-coder-plus",
+			"alibaba",
+			50000,
+			20000,
+			null,
+		);
+		expect(mediumResult.inputCost).toBeCloseTo(0.09); // 50000 * (1.8/1e6)
+		expect(mediumResult.outputCost).toBeCloseTo(0.18); // 20000 * (9/1e6)
+		expect(mediumResult.totalCost).toBeCloseTo(0.27); // 0.09 + 0.18
+
+		// Large context (256K-1M): should use fourth tier ($6/$60 per million)
+		const largeResult = calculateCosts(
+			"qwen3-coder-plus",
+			"alibaba",
+			300000,
+			100000,
+			null,
+		);
+		expect(largeResult.inputCost).toBeCloseTo(1.8); // 300000 * (6/1e6)
+		expect(largeResult.outputCost).toBeCloseTo(6.0); // 100000 * (60/1e6)
+		expect(largeResult.totalCost).toBeCloseTo(7.8); // 1.8 + 6.0
+	});
 });
