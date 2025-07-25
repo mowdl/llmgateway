@@ -13,7 +13,7 @@ image:
 
 ## Bring Your Own Provider Keys
 
-- **0% LLM Gateway fees** when using your own OpenAI, Anthropic, Google AI Studio keys
+- **0% LLM Gateway fees** when using your own provider keys
 - **Direct cost control** - Pay providers directly at their exact rates
 - **No markup** - What you pay the provider is what you pay, period
 - **Full transparency** - See exact provider costs in real-time

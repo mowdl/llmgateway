@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
-import { db, errorDetails } from "@llmgateway/db";
+import { db, errorDetails, tables, sql, and } from "@llmgateway/db";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 
@@ -47,6 +47,7 @@ const logSchema = z.object({
 	canceled: z.boolean().nullable(),
 	streamed: z.boolean().nullable(),
 	cached: z.boolean().nullable(),
+	customHeaders: z.any().nullable(),
 	mode: z.enum(["api-keys", "credits", "hybrid"]),
 	usedMode: z.enum(["api-keys", "credits"]),
 });
@@ -98,6 +99,15 @@ const querySchema = z.object({
 			description: "Number of items to return (default: 50, max: 100)",
 			example: "50",
 		}),
+	customHeaderKey: z.string().optional().openapi({
+		description:
+			"Filter logs by custom header key (without x-llmgateway- prefix)",
+		example: "uid",
+	}),
+	customHeaderValue: z.string().optional().openapi({
+		description: "Filter logs by custom header value",
+		example: "12345",
+	}),
 });
 
 const get = createRoute({
@@ -170,6 +180,8 @@ logs.openapi(get, async (c) => {
 		cursor,
 		orderBy = "createdAt_desc",
 		limit: queryLimit,
+		customHeaderKey,
+		customHeaderValue,
 	} = {
 		...query,
 		apiKeyId: sanitize(query.apiKeyId),
@@ -182,6 +194,8 @@ logs.openapi(get, async (c) => {
 		unifiedFinishReason: sanitize(query.unifiedFinishReason),
 		provider: sanitize(query.provider),
 		model: sanitize(query.model),
+		customHeaderKey: sanitize(query.customHeaderKey),
+		customHeaderValue: sanitize(query.customHeaderValue),
 	};
 
 	// Set default limit if not provided or enforce max limit
@@ -353,6 +367,13 @@ logs.openapi(get, async (c) => {
 		logsWhere.providerKeyId = providerKeyId;
 	}
 
+	// Add custom header filtering if both key and value are provided
+	let customHeaderCondition: any = null;
+	if (customHeaderKey && customHeaderValue) {
+		// Use SQL to filter JSON field where customHeaders->>key = value
+		customHeaderCondition = sql`${tables.log.customHeaders} ->> ${customHeaderKey} = ${customHeaderValue}`;
+	}
+
 	// Add cursor-based pagination
 	let cursorCondition: any = {};
 	if (cursor) {
@@ -421,18 +442,53 @@ logs.openapi(get, async (c) => {
 		sortDirection = "desc";
 	}
 
-	// Query logs with all filters
-	const logs = await db.query.log.findMany({
-		where: {
-			...logsWhere,
-			...cursorCondition,
-		},
-		orderBy: {
-			[sortField]: sortDirection as "asc" | "desc",
-			id: sortDirection as "asc" | "desc", // Secondary sort by ID for stable pagination
-		},
-		limit: limit + 1, // Fetch one extra to determine if there are more results
-	});
+	// Query logs with all filters using hybrid approach
+	let logs;
+
+	{
+		// Use relational query for all cases, then filter custom headers in-memory if needed
+		const whereConditions = [];
+
+		// Add base where conditions
+		if (Object.keys(logsWhere).length > 0) {
+			whereConditions.push(logsWhere);
+		}
+
+		// Add cursor condition
+		if (Object.keys(cursorCondition).length > 0) {
+			whereConditions.push(cursorCondition);
+		}
+
+		// Fetch more logs if we need to filter by custom headers in-memory
+		const fetchLimit = customHeaderCondition
+			? Math.max((limit + 1) * 5, 250)
+			: limit + 1;
+
+		logs = await db.query.log.findMany({
+			where:
+				whereConditions.length > 1
+					? and(...whereConditions)
+					: whereConditions[0] || {},
+			orderBy: {
+				[sortField]: sortDirection as "asc" | "desc",
+				id: sortDirection as "asc" | "desc", // Secondary sort by ID for stable pagination
+			},
+			limit: fetchLimit, // Fetch extra to account for in-memory filtering
+		});
+
+		// Apply custom header filtering in-memory if needed
+		if (customHeaderCondition && customHeaderKey && customHeaderValue) {
+			logs = logs.filter((log: any) => {
+				if (!log.customHeaders || typeof log.customHeaders !== "object") {
+					return false;
+				}
+				return log.customHeaders[customHeaderKey] === customHeaderValue;
+			});
+
+			// Trim to requested limit plus one for pagination
+			logs = logs.slice(0, limit + 1);
+		}
+	}
 
 	// Check if there are more results
 	const hasMore = logs.length > limit;

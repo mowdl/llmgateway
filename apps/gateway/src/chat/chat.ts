@@ -61,6 +61,28 @@ function getFinishReasonForError(statusCode: number): string {
 }
 
 /**
+ * Extracts X-LLMGateway-* headers from the request context
+ * Returns a key-value object where keys are the suffix after x-llmgateway- and values are header values
+ */
+function extractCustomHeaders(c: any): Record<string, string> {
+	const customHeaders: Record<string, string> = {};
+
+	// Get all headers from the raw request
+	const headers = c.req.raw.headers;
+
+	// Iterate through all headers
+	for (const [key, value] of headers.entries()) {
+		if (key.toLowerCase().startsWith("x-llmgateway-")) {
+			// Extract the suffix after x-llmgateway- and store with lowercase key
+			const suffix = key.toLowerCase().substring("x-llmgateway-".length);
+			customHeaders[suffix] = value;
+		}
+	}
+
+	return customHeaders;
+}
+
+/**
  * Creates a partial log entry with common fields to reduce duplication
  */
 function createLogEntry(
@@ -78,6 +100,7 @@ function createLogEntry(
 	top_p: number | undefined,
 	frequency_penalty: number | undefined,
 	presence_penalty: number | undefined,
+	customHeaders: Record<string, string>,
 ) {
 	return {
 		requestId,
@@ -95,6 +118,7 @@ function createLogEntry(
 		topP: top_p || null,
 		frequencyPenalty: frequency_penalty || null,
 		presencePenalty: presence_penalty || null,
+		customHeaders: Object.keys(customHeaders).length > 0 ? customHeaders : null,
 		mode: project.mode,
 	} as const;
 }
@@ -1090,11 +1114,17 @@ chat.openapi(completions, async (c) => {
 		tool_choice,
 		reasoning_effort,
 	} = c.req.valid("json");
+	console.log("messages", messages);
+	console.log("tools", tools);
+	console.log("tool_choice", tool_choice);
 
 	// Extract or generate request ID
 	const requestId = c.req.header("x-request-id") || shortid(40);
 
 	c.header("x-request-id", requestId);
+
+	// Extract custom X-LLMGateway-* headers
+	const customHeaders = extractCustomHeaders(c);
 
 	let requestedModel: Model = modelInput as Model;
 	let requestedProvider: Provider | undefined;
@@ -1668,6 +1698,7 @@ chat.openapi(completions, async (c) => {
 				top_p,
 				frequency_penalty,
 				presence_penalty,
+				customHeaders,
 			);
 
 			await insertLog({
@@ -1802,6 +1833,7 @@ chat.openapi(completions, async (c) => {
 						top_p,
 						frequency_penalty,
 						presence_penalty,
+						customHeaders,
 					);
 
 					await insertLog({
@@ -1885,6 +1917,7 @@ chat.openapi(completions, async (c) => {
 					top_p,
 					frequency_penalty,
 					presence_penalty,
+					customHeaders,
 				);
 
 				await insertLog({
@@ -2551,6 +2584,7 @@ chat.openapi(completions, async (c) => {
 					top_p,
 					frequency_penalty,
 					presence_penalty,
+					customHeaders,
 				);
 
 				await insertLog({
@@ -2636,6 +2670,7 @@ chat.openapi(completions, async (c) => {
 			top_p,
 			frequency_penalty,
 			presence_penalty,
+			customHeaders,
 		);
 
 		await insertLog({
@@ -2697,6 +2732,7 @@ chat.openapi(completions, async (c) => {
 			top_p,
 			frequency_penalty,
 			presence_penalty,
+			customHeaders,
 		);
 
 		await insertLog({
@@ -2803,6 +2839,7 @@ chat.openapi(completions, async (c) => {
 		top_p,
 		frequency_penalty,
 		presence_penalty,
+		customHeaders,
 	);
 
 	await insertLog({

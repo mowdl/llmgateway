@@ -6,6 +6,7 @@ import {
 	type DateRange,
 	DateRangeSelect,
 } from "@/components/date-range-select";
+import { Input } from "@/lib/components/input";
 import {
 	Select,
 	SelectContent,
@@ -73,6 +74,7 @@ interface RecentLogsProps {
 					canceled: boolean | null;
 					streamed: boolean | null;
 					cached: boolean | null;
+					customHeaders: Record<string, string> | null;
 					mode: "api-keys" | "credits" | "hybrid";
 					usedMode: "api-keys" | "credits";
 				}[];
@@ -93,6 +95,8 @@ export function RecentLogs({ initialData }: RecentLogsProps) {
 	>();
 	const [provider, setProvider] = useState<string | undefined>();
 	const [model, setModel] = useState<string | undefined>();
+	const [customHeaderKey, setCustomHeaderKey] = useState<string>("");
+	const [customHeaderValue, setCustomHeaderValue] = useState<string>("");
 	const { selectedProject } = useDashboardState();
 	const api = useApi();
 	const scrollPositionRef = useRef<number>(0);
@@ -159,6 +163,10 @@ export function RecentLogs({ initialData }: RecentLogsProps) {
 	if (selectedProject?.id) {
 		queryParams.projectId = selectedProject.id;
 	}
+	if (customHeaderKey && customHeaderValue) {
+		queryParams.customHeaderKey = customHeaderKey;
+		queryParams.customHeaderValue = customHeaderValue;
+	}
 
 	const { data, isLoading, error } = api.useQuery(
 		"get",
@@ -175,7 +183,9 @@ export function RecentLogs({ initialData }: RecentLogsProps) {
 				!finishReason &&
 				!unifiedFinishReason &&
 				!provider &&
-				!model
+				!model &&
+				!customHeaderKey &&
+				!customHeaderValue
 					? initialData
 					: undefined,
 			refetchOnWindowFocus: false,
@@ -273,6 +283,28 @@ export function RecentLogs({ initialData }: RecentLogsProps) {
 						))}
 					</SelectContent>
 				</Select>
+
+				<Input
+					placeholder="Custom header key (e.g., uid)"
+					value={customHeaderKey}
+					onChange={(e) => {
+						isFilteringRef.current = true;
+						scrollPositionRef.current = window.scrollY;
+						setCustomHeaderKey(e.target.value);
+					}}
+					className="w-[200px]"
+				/>
+
+				<Input
+					placeholder="Custom header value (e.g., 12345)"
+					value={customHeaderValue}
+					onChange={(e) => {
+						isFilteringRef.current = true;
+						scrollPositionRef.current = window.scrollY;
+						setCustomHeaderValue(e.target.value);
+					}}
+					className="w-[200px]"
+				/>
 			</div>
 
 			{isLoading ? (
@@ -292,6 +324,7 @@ export function RecentLogs({ initialData }: RecentLogsProps) {
 									messages: log.messages as any,
 									toolCalls: null,
 									errorDetails: log.errorDetails as any,
+									customHeaders: (log as any).customHeaders || null,
 									cachedTokens: (log as any).cachedTokens || null,
 									cachedInputCost: (log as any).cachedInputCost || null,
 								}}
