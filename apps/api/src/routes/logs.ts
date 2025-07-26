@@ -1,5 +1,20 @@
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
-import { db, errorDetails, tables, sql, and } from "@llmgateway/db";
+import {
+	db,
+	errorDetails,
+	tables,
+	sql,
+	inArray,
+	eq,
+	gte,
+	lte,
+	gt,
+	lt,
+	and,
+	or,
+	asc,
+	desc,
+} from "@llmgateway/db";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 
@@ -319,176 +334,117 @@ logs.openapi(get, async (c) => {
 		}
 	}
 
-	// Build the logs query with all applicable filters
-	const logsWhere: any = {
-		projectId: {
-			in: projectId ? [projectId] : projectIds,
-		},
-	};
+	// Build where conditions for the select query
+	const whereConditions = [];
 
-	// Add date range filters if provided
-	if (startDate || endDate) {
-		logsWhere.createdAt = {};
-		if (startDate) {
-			logsWhere.createdAt.gte = new Date(startDate);
-		}
-		if (endDate) {
-			logsWhere.createdAt.lte = new Date(endDate);
-		}
+	// Add project filter
+	if (projectId) {
+		whereConditions.push(eq(tables.log.projectId, projectId));
+	} else {
+		whereConditions.push(inArray(tables.log.projectId, projectIds));
 	}
 
-	// Add model filter if provided
+	// Add date range filters
+	if (startDate) {
+		whereConditions.push(gte(tables.log.createdAt, new Date(startDate)));
+	}
+	if (endDate) {
+		whereConditions.push(lte(tables.log.createdAt, new Date(endDate)));
+	}
+
+	// Add model filter
 	if (model) {
-		logsWhere.usedModel = model;
+		whereConditions.push(eq(tables.log.usedModel, model));
 	}
 
-	// Add provider filter if provided
+	// Add provider filter
 	if (provider) {
-		logsWhere.usedProvider = provider;
+		whereConditions.push(eq(tables.log.usedProvider, provider));
 	}
 
-	// Add finish reason filter if provided
+	// Add finish reason filter
 	if (finishReason) {
-		logsWhere.finishReason = finishReason;
+		whereConditions.push(eq(tables.log.finishReason, finishReason));
 	}
 
-	// Add unified finish reason filter if provided
+	// Add unified finish reason filter
 	if (unifiedFinishReason) {
-		logsWhere.unifiedFinishReason = unifiedFinishReason;
+		whereConditions.push(
+			eq(tables.log.unifiedFinishReason, unifiedFinishReason),
+		);
 	}
 
-	// Add apiKeyId filter if provided
+	// Add apiKeyId filter
 	if (apiKeyId) {
-		logsWhere.apiKeyId = apiKeyId;
+		whereConditions.push(eq(tables.log.apiKeyId, apiKeyId));
 	}
 
-	// Add providerKeyId filter if provided
+	// Add providerKeyId filter
 	if (providerKeyId) {
-		logsWhere.providerKeyId = providerKeyId;
+		// whereConditions.push(eq(tables.log.providerKeyId, providerKeyId));
 	}
 
-	// Add custom header filtering if both key and value are provided
-	let customHeaderCondition: any = null;
+	// Add custom header filter
 	if (customHeaderKey && customHeaderValue) {
-		// Use SQL to filter JSON field where customHeaders->>key = value
-		customHeaderCondition = sql`${tables.log.customHeaders} ->> ${customHeaderKey} = ${customHeaderValue}`;
+		whereConditions.push(
+			sql`${tables.log.customHeaders} ->> ${customHeaderKey} = ${customHeaderValue}`,
+		);
 	}
 
-	// Add cursor-based pagination
-	let cursorCondition: any = {};
+	// Add cursor-based pagination conditions
 	if (cursor) {
-		// Find the log entry for the cursor to get its createdAt timestamp
-		const cursorLog = await db.query.log.findFirst({
-			where: {
-				id: cursor,
-			},
-		});
+		const cursorLog = await db
+			.select()
+			.from(tables.log)
+			.where(eq(tables.log.id, cursor))
+			.limit(1);
 
-		if (cursorLog) {
-			// Add condition based on sort direction
+		if (cursorLog.length > 0) {
+			const cursorCreatedAt = cursorLog[0].createdAt;
+
 			if (orderBy === "createdAt_asc") {
-				// When sorting by createdAt ascending, get logs with createdAt > cursor's createdAt
-				// or with the same createdAt but with ID > cursor's ID
-				cursorCondition = {
-					OR: [
-						{
-							createdAt: {
-								gt: cursorLog.createdAt,
-							},
-						},
-						{
-							createdAt: {
-								eq: cursorLog.createdAt,
-							},
-							id: {
-								gt: cursorLog.id,
-							},
-						},
-					],
-				};
+				whereConditions.push(
+					or(
+						gt(tables.log.createdAt, cursorCreatedAt),
+						and(
+							eq(tables.log.createdAt, cursorCreatedAt),
+							gt(tables.log.id, cursor),
+						),
+					),
+				);
 			} else {
-				// When sorting by createdAt descending (default), get logs with createdAt < cursor's createdAt
-				// or with the same createdAt but with ID < cursor's ID
-				cursorCondition = {
-					OR: [
-						{
-							createdAt: {
-								lt: cursorLog.createdAt,
-							},
-						},
-						{
-							createdAt: {
-								eq: cursorLog.createdAt,
-							},
-							id: {
-								lt: cursorLog.id,
-							},
-						},
-					],
-				};
+				whereConditions.push(
+					or(
+						lt(tables.log.createdAt, cursorCreatedAt),
+						and(
+							eq(tables.log.createdAt, cursorCreatedAt),
+							lt(tables.log.id, cursor),
+						),
+					),
+				);
 			}
 		}
 	}
 
-	// Determine sort order based on orderBy parameter
-	let sortField = "createdAt";
-	let sortDirection = "desc";
+	// Build the final where clause
+	const finalWhereClause =
+		whereConditions.length > 0 ? and(...whereConditions) : undefined;
 
-	if (orderBy === "createdAt_asc") {
-		sortField = "createdAt";
-		sortDirection = "asc";
-	} else if (orderBy === "createdAt_desc") {
-		sortField = "createdAt";
-		sortDirection = "desc";
+	// Build order by clauses
+	const orderByClauses =
+		orderBy === "createdAt_asc"
+			? [asc(tables.log.createdAt), asc(tables.log.id)]
+			: [desc(tables.log.createdAt), desc(tables.log.id)];
+
+	// Execute the query using select
+	let dbQuery = db.select().from(tables.log);
+
+	if (finalWhereClause) {
+		// @ts-ignore
+		dbQuery = dbQuery.where(finalWhereClause);
 	}
 
-	// Query logs with all filters using hybrid approach
-	let logs;
-
-	{
-		// Use relational query for all cases, then filter custom headers in-memory if needed
-		const whereConditions = [];
-
-		// Add base where conditions
-		if (Object.keys(logsWhere).length > 0) {
-			whereConditions.push(logsWhere);
-		}
-
-		// Add cursor condition
-		if (Object.keys(cursorCondition).length > 0) {
-			whereConditions.push(cursorCondition);
-		}
-
-		// Fetch more logs if we need to filter by custom headers in-memory
-		const fetchLimit = customHeaderCondition
-			? Math.max((limit + 1) * 5, 250)
-			: limit + 1;
-
-		logs = await db.query.log.findMany({
-			where:
-				whereConditions.length > 1
-					? and(...whereConditions)
-					: whereConditions[0] || {},
-			orderBy: {
-				[sortField]: sortDirection as "asc" | "desc",
-				id: sortDirection as "asc" | "desc", // Secondary sort by ID for stable pagination
-			},
-			limit: fetchLimit, // Fetch extra to account for in-memory filtering
-		});
-
-		// Apply custom header filtering in-memory if needed
-		if (customHeaderCondition && customHeaderKey && customHeaderValue) {
-			logs = logs.filter((log: any) => {
-				if (!log.customHeaders || typeof log.customHeaders !== "object") {
-					return false;
-				}
-				return log.customHeaders[customHeaderKey] === customHeaderValue;
-			});
-
-			// Trim to requested limit plus one for pagination
-			logs = logs.slice(0, limit + 1);
-		}
-	}
+	const logs = await dbQuery.orderBy(...orderByClauses).limit(limit + 1); // Fetch one extra for pagination
 
 	// Check if there are more results
 	const hasMore = logs.length > limit;
