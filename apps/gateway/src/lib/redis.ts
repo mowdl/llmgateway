@@ -3,9 +3,18 @@ import Redis from "ioredis";
 const redisClient = new Redis({
 	host: process.env.REDIS_HOST || "localhost",
 	port: Number(process.env.REDIS_PORT) || 6379,
+	maxRetriesPerRequest: 3,
+	enableReadyCheck: true,
+	lazyConnect: true,
 });
 
 redisClient.on("error", (err) => console.error("Redis Client Error", err));
+redisClient.on("connect", () => console.log("Redis client connected"));
+redisClient.on("ready", () => console.log("Redis client ready"));
+redisClient.on("close", () => console.log("Redis client connection closed"));
+redisClient.on("reconnecting", () =>
+	console.log("Redis client reconnecting..."),
+);
 
 export const LOG_QUEUE = "log_queue_" + process.env.NODE_ENV;
 export const LOG_PROCESSING_QUEUE =
@@ -75,13 +84,26 @@ export async function moveToProcessingQueue(
 	count: number,
 ): Promise<string[] | null> {
 	try {
-		const messages: string[] = [];
+		// Use pipeline for better performance when moving multiple messages
+		const pipeline = redisClient.pipeline();
 		for (let i = 0; i < count; i++) {
-			const message = await redisClient.rpoplpush(sourceQueue, processingQueue);
-			if (!message) {
-				break;
+			pipeline.rpoplpush(sourceQueue, processingQueue);
+		}
+		const results = await pipeline.exec();
+
+		if (!results) {
+			return null;
+		}
+
+		const messages: string[] = [];
+		for (const result of results) {
+			const [error, message] = result;
+			if (error) {
+				throw error;
 			}
-			messages.push(message);
+			if (message) {
+				messages.push(message as string);
+			}
 		}
 
 		return messages.length > 0 ? messages : null;
@@ -96,9 +118,12 @@ export async function removeFromProcessingQueue(
 	count: number,
 ): Promise<void> {
 	try {
+		// Use pipeline for better performance when removing multiple messages
+		const pipeline = redisClient.pipeline();
 		for (let i = 0; i < count; i++) {
-			await redisClient.lpop(processingQueue);
+			pipeline.lpop(processingQueue);
 		}
+		await pipeline.exec();
 	} catch (error) {
 		console.error("Error removing from processing queue:", error);
 		throw error;
@@ -110,15 +135,48 @@ export async function recoverProcessingQueue(
 	targetQueue: string,
 ): Promise<void> {
 	try {
-		while (true) {
-			const message = await redisClient.rpoplpush(processingQueue, targetQueue);
-			if (!message) {
-				break;
-			}
+		// Get count of messages first to use pipeline for better performance
+		const messageCount = await redisClient.llen(processingQueue);
+		if (messageCount === 0) {
+			return;
 		}
+
+		console.log(`Recovering ${messageCount} messages from processing queue`);
+
+		// Use pipeline for batch recovery
+		const pipeline = redisClient.pipeline();
+		for (let i = 0; i < messageCount; i++) {
+			pipeline.rpoplpush(processingQueue, targetQueue);
+		}
+		await pipeline.exec();
 	} catch (error) {
 		console.error("Error recovering processing queue:", error);
 		throw error;
+	}
+}
+
+export async function getQueueLength(queue: string): Promise<number> {
+	try {
+		return await redisClient.llen(queue);
+	} catch (error) {
+		console.error(`Error getting queue length for ${queue}:`, error);
+		return 0;
+	}
+}
+
+export async function getQueueStats(): Promise<{
+	mainQueue: number;
+	processingQueue: number;
+}> {
+	try {
+		const [mainQueue, processingQueue] = await Promise.all([
+			getQueueLength(LOG_QUEUE),
+			getQueueLength(LOG_PROCESSING_QUEUE),
+		]);
+		return { mainQueue, processingQueue };
+	} catch (error) {
+		console.error("Error getting queue stats:", error);
+		return { mainQueue: 0, processingQueue: 0 };
 	}
 }
 

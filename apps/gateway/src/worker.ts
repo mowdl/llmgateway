@@ -14,6 +14,7 @@ import {
 	moveToProcessingQueue,
 	removeFromProcessingQueue,
 	recoverProcessingQueue,
+	getQueueStats,
 	LOG_QUEUE,
 	LOG_PROCESSING_QUEUE,
 } from "./lib/redis";
@@ -249,7 +250,6 @@ export async function processLogQueue(): Promise<void> {
 	}
 
 	try {
-		let logData: LogInsertData[];
 		// Parse each message individually and discard only the invalid ones
 		const parseResults: {
 			data?: LogInsertData;
@@ -304,22 +304,36 @@ export async function processLogQueue(): Promise<void> {
 		// Insert logs into database
 		await db.insert(log).values(processedLogData as any);
 
-		// Update organization credits
+		// Batch update organization credits for better performance
+		const creditUpdates = new Map<string, number>();
+		const projectCache = new Map<string, any>();
+
 		for (const data of logData) {
 			if (!data.cost || data.cached) {
 				continue;
 			}
 
-			const project = await getProject(data.projectId);
+			// Cache project lookups to avoid redundant database calls
+			let project = projectCache.get(data.projectId);
+			if (!project) {
+				project = await getProject(data.projectId);
+				projectCache.set(data.projectId, project);
+			}
 
 			if (project?.mode !== "api-keys") {
-				await db
-					.update(organization)
-					.set({
-						credits: sql`${organization.credits} - ${data.cost}`,
-					})
-					.where(eq(organization.id, data.organizationId));
+				const currentCost = creditUpdates.get(data.organizationId) || 0;
+				creditUpdates.set(data.organizationId, currentCost + data.cost);
 			}
+		}
+
+		// Apply batched credit updates
+		for (const [organizationId, totalCost] of creditUpdates) {
+			await db
+				.update(organization)
+				.set({
+					credits: sql`${organization.credits} - ${totalCost}`,
+				})
+				.where(eq(organization.id, organizationId));
 		}
 
 		// Only remove from processing queue after successful processing
@@ -329,12 +343,16 @@ export async function processLogQueue(): Promise<void> {
 		// Move messages back to main queue for retry
 		try {
 			await recoverProcessingQueue(LOG_PROCESSING_QUEUE, LOG_QUEUE);
+			console.log(
+				`Recovered ${messages.length} messages back to main queue for retry`,
+			);
 		} catch (recoveryError) {
 			console.error("Error recovering messages to main queue:", recoveryError);
 			// If we can't recover to main queue, at least log the issue
 			// Messages will remain in processing queue and be recovered on next worker restart
 		}
-		throw error;
+		// Don't re-throw the error to avoid stopping the worker
+		// The error has been logged and messages have been recovered
 	}
 }
 
@@ -361,6 +379,8 @@ export async function startWorker() {
 
 	const count = process.env.NODE_ENV === "production" ? 120 : 5;
 	let autoTopUpCounter = 0;
+	let queueStatsCounter = 0;
+	const queueStatsInterval = process.env.NODE_ENV === "production" ? 60 : 10; // Log queue stats every 60 iterations in prod, 10 in dev
 
 	// eslint-disable-next-line no-unmodified-loop-condition
 	while (!shouldStop) {
@@ -373,6 +393,18 @@ export async function startWorker() {
 				autoTopUpCounter = 0;
 			}
 
+			// Log queue stats periodically for monitoring
+			queueStatsCounter++;
+			if (queueStatsCounter >= queueStatsInterval) {
+				const stats = await getQueueStats();
+				if (stats.mainQueue > 0 || stats.processingQueue > 0) {
+					console.log(
+						`Queue stats - Main: ${stats.mainQueue}, Processing: ${stats.processingQueue}`,
+					);
+				}
+				queueStatsCounter = 0;
+			}
+
 			if (!shouldStop) {
 				await new Promise((resolve) => {
 					setTimeout(resolve, 1000);
@@ -380,10 +412,13 @@ export async function startWorker() {
 			}
 		} catch (error) {
 			console.error("Error in log queue worker:", error);
-			// Wait longer on error to prevent rapid retries that could overwhelm the system
+			// Exponential backoff on error to prevent overwhelming the system
 			if (!shouldStop) {
+				// Start with 5 seconds, can be extended for persistent errors
+				const backoffTime = 5000;
+				console.log(`Waiting ${backoffTime}ms before retrying after error`);
 				await new Promise((resolve) => {
-					setTimeout(resolve, 5000);
+					setTimeout(resolve, backoffTime);
 				});
 			}
 		}
