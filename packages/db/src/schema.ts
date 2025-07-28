@@ -288,6 +288,7 @@ export const log = pgTable("log", {
 	canceled: boolean().default(false),
 	streamed: boolean().default(false),
 	cached: boolean().default(false),
+	source: text(), // Source tracking via x-source header
 	mode: text({
 		enum: ["api-keys", "credits", "hybrid"],
 	}).notNull(),

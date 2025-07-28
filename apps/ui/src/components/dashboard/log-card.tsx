@@ -246,6 +246,10 @@ export function LogCard({ log }: { log: Log }) {
 								<div>{log.mode || "?"}</div>
 								<div className="text-muted-foreground">Used Mode</div>
 								<div>{log.usedMode || "?"}</div>
+								<div className="text-muted-foreground">Source</div>
+								<div className="font-mono text-xs break-all">
+									{log.source || "–"}
+								</div>
 							</div>
 						</div>
 					</div>
