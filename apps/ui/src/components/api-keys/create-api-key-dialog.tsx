@@ -35,6 +35,7 @@ export function CreateApiKeyDialog({
 	const [open, setOpen] = useState(false);
 	const [step, setStep] = useState<"form" | "created">("form");
 	const [name, setName] = useState("");
+	const [limit, setLimit] = useState<string>("");
 	const [apiKey, setApiKey] = useState("");
 	const api = useApi();
 
@@ -52,6 +53,7 @@ export function CreateApiKeyDialog({
 				body: {
 					description: name.trim(),
 					projectId: selectedProject.id,
+					usageLimit: limit === "" ? null : limit,
 				},
 			},
 			{
@@ -93,6 +95,7 @@ export function CreateApiKeyDialog({
 			setStep("form");
 			setName("");
 			setApiKey("");
+			setLimit("");
 		}, 300);
 	};
 
@@ -120,6 +123,16 @@ export function CreateApiKeyDialog({
 									value={name}
 									onChange={(e) => setName(e.target.value)}
 									required
+								/>
+							</div>
+							<div className="space-y-2">
+								<Label htmlFor="limit">API Key Usage Limit</Label>
+								<Input
+									id="name"
+									placeholder="Leave empty for no usage limit"
+									value={limit}
+									onChange={(e) => setLimit(e.target.value)}
+									type="number"
 								/>
 							</div>
 							<DialogFooter>
