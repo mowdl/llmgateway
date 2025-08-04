@@ -128,7 +128,7 @@ export function CreateApiKeyDialog({
 							<div className="space-y-2">
 								<Label htmlFor="limit">API Key Usage Limit</Label>
 								<Input
-									id="name"
+									id="limit"
 									placeholder="Leave empty for no usage limit"
 									value={limit}
 									onChange={(e) => setLimit(e.target.value)}

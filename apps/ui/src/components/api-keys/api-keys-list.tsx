@@ -327,7 +327,6 @@ export function ApiKeysList({
 													const newUsageLimit = formData.get("limit") as
 														| string
 														| null;
-													console.log("new usage limit:", newUsageLimit);
 													if (newUsageLimit === key.usageLimit) {
 														return;
 													}
@@ -353,7 +352,9 @@ export function ApiKeysList({
 													<Input
 														id="limit"
 														name="limit"
-														defaultValue={Number(key.usageLimit)}
+														defaultValue={
+															key.usageLimit ? Number(key.usageLimit) : ""
+														}
 														type="number"
 													/>
 												</div>
