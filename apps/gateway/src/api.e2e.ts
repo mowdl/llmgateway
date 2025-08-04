@@ -16,7 +16,7 @@ import {
 
 // Helper function to get test options with retry for CI environment
 function getTestOptions() {
-	return process.env.CI ? { retry: 5 } : {};
+	return process.env.CI ? { retry: 3 } : {};
 }
 
 console.log("running with test options:", getTestOptions());
@@ -574,6 +574,57 @@ describe("e2e", () => {
 				expect(json.usage.total_tokens).toEqual(
 					json.usage.prompt_tokens + json.usage.completion_tokens,
 				);
+			},
+		);
+
+		test.each(testModels)(
+			"parameters $model",
+			getTestOptions(),
+			async ({ model }) => {
+				const res = await app.request("/v1/chat/completions", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: `Bearer real-token`,
+					},
+					body: JSON.stringify({
+						model: model,
+						messages: [
+							{
+								role: "system",
+								content: "You are a helpful assistant.",
+							},
+							{
+								role: "user",
+								content: "Hello, just reply 'OK'!",
+							},
+						],
+						max_tokens: 200,
+						temperature: 0.7,
+					}),
+				});
+
+				const json = await res.json();
+				if (logMode) {
+					console.log("parameters response:", JSON.stringify(json, null, 2));
+				}
+
+				expect(res.status).toBe(200);
+				validateResponse(json);
+
+				const log = await validateLogs();
+				expect(log.streamed).toBe(false);
+
+				expect(json).toHaveProperty("usage");
+				expect(json.usage).toHaveProperty("prompt_tokens");
+				expect(json.usage).toHaveProperty("completion_tokens");
+				expect(json.usage).toHaveProperty("total_tokens");
+				expect(typeof json.usage.prompt_tokens).toBe("number");
+				expect(typeof json.usage.completion_tokens).toBe("number");
+				expect(typeof json.usage.total_tokens).toBe("number");
+				expect(json.usage.prompt_tokens).toBeGreaterThan(0);
+				expect(json.usage.completion_tokens).toBeGreaterThan(0);
+				expect(json.usage.total_tokens).toBeGreaterThan(0);
 			},
 		);
 	}

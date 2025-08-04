@@ -28,6 +28,7 @@ export function getProviderHeaders(
 		case "moonshot":
 		case "alibaba":
 		case "nebius":
+		case "zai":
 		case "custom":
 		default:
 			return {
@@ -53,6 +54,7 @@ export function prepareRequestBody(
 	tools?: any[],
 	tool_choice?: string | { type: string; function: { name: string } },
 	reasoning_effort?: "low" | "medium" | "high",
+	supportsReasoning?: boolean,
 ) {
 	const requestBody: any = {
 		model: usedModel,
@@ -79,6 +81,7 @@ export function prepareRequestBody(
 		case "moonshot":
 		case "alibaba":
 		case "nebius":
+		case "zai":
 		case "custom": {
 			if (stream) {
 				requestBody.stream_options = {
@@ -165,7 +168,7 @@ export function prepareRequestBody(
 									text: i.text,
 								};
 							}
-							throw new Error("No support for non-text parts yet");
+							throw new Error(`Not supported content type yet: ${i.type}`);
 						})
 					: [
 							{
@@ -185,6 +188,13 @@ export function prepareRequestBody(
 			}
 			if (top_p !== undefined) {
 				requestBody.generationConfig.topP = top_p;
+			}
+
+			// Enable thinking/reasoning content exposure for Google models that support reasoning
+			if (supportsReasoning) {
+				requestBody.generationConfig.thinkingConfig = {
+					includeThoughts: true,
+				};
 			}
 
 			break;
@@ -300,6 +310,9 @@ export function getProviderEndpoint(
 			case "nebius":
 				url = "https://api.studio.nebius.com";
 				break;
+			case "zai":
+				url = "https://api.z.ai";
+				break;
 			case "custom":
 				if (!baseUrl) {
 					throw new Error(`Custom provider requires a baseUrl`);
@@ -344,6 +357,8 @@ export function getProviderEndpoint(
 			return `${url}/chat/completions`;
 		case "novita":
 			return `${url}/chat/completions`;
+		case "zai":
+			return `${url}/api/paas/v4/chat/completions`;
 		case "inference.net":
 		case "openai":
 		case "llmgateway":
@@ -487,6 +502,7 @@ export async function validateProviderKey(
 			undefined, // tools
 			undefined, // tool_choice
 			undefined, // reasoning_effort
+			false, // supportsReasoning - disable for validation
 		);
 
 		const headers = getProviderHeaders(provider, token);
