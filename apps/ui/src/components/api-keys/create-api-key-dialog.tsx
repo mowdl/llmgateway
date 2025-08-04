@@ -127,6 +127,10 @@ export function CreateApiKeyDialog({
 							</div>
 							<div className="space-y-2">
 								<Label htmlFor="limit">API Key Usage Limit</Label>
+								<div className="text-muted-foreground text-sm">
+									Usage includes both usage from LLM Gateway credits and usage
+									from your own provider keys when applicable.
+								</div>
 								<Input
 									id="limit"
 									placeholder="Leave empty for no usage limit"

@@ -357,6 +357,11 @@ export function ApiKeysList({
 														}
 														type="number"
 													/>
+													<div className="text-muted-foreground text-sm">
+														Usage includes both usage from LLM Gateway credits
+														and usage from your own provider keys when
+														applicable.
+													</div>
 												</div>
 												<DialogFooter className="pt-8">
 													<DialogClose asChild>
