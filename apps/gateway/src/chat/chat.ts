@@ -222,36 +222,46 @@ function parseProviderResponse(usedProvider: Provider, json: any) {
 			break;
 		case "google-vertex":
 		case "google-ai-studio": {
-			content = json.candidates?.[0]?.content?.parts?.[0]?.text || null;
+			// Extract content and reasoning content from Google response parts
+			const parts = json.candidates?.[0]?.content?.parts || [];
+			const contentParts = parts.filter((part: any) => !part.thought);
+			const reasoningParts = parts.filter((part: any) => part.thought);
+
+			content = contentParts.map((part: any) => part.text).join("") || null;
+			reasoningContent =
+				reasoningParts.map((part: any) => part.text).join("") || null;
+
 			finishReason = json.candidates?.[0]?.finishReason || null;
 			promptTokens = json.usageMetadata?.promptTokenCount || null;
 			completionTokens = json.usageMetadata?.candidatesTokenCount || null;
 			reasoningTokens = json.usageMetadata?.thoughtsTokenCount || null;
-			totalTokens = json.usageMetadata?.totalTokenCount || null;
+			// Don't use Google's totalTokenCount as it doesn't include reasoning tokens
+			totalTokens = null;
 
-			// If candidatesTokenCount is missing, estimate it from the content
-			if (completionTokens === null && content) {
-				const estimation = estimateTokens(
-					usedProvider,
-					[],
-					content,
-					null,
-					null,
-				);
-				completionTokens = estimation.calculatedCompletionTokens;
+			// If candidatesTokenCount is missing, estimate it from the content or set to 0
+			if (completionTokens === null) {
+				if (content) {
+					const estimation = estimateTokens(
+						usedProvider,
+						[],
+						content,
+						null,
+						null,
+					);
+					completionTokens = estimation.calculatedCompletionTokens;
+				} else {
+					// No content means 0 completion tokens (e.g., MAX_TOKENS with only reasoning)
+					completionTokens = 0;
+				}
 			}
 
-			// Calculate totalTokens if not provided but we have prompt and completion tokens
-			if (
-				totalTokens === null &&
-				promptTokens !== null &&
-				completionTokens !== null
-			) {
-				totalTokens = promptTokens + completionTokens + (reasoningTokens || 0);
+			// Calculate totalTokens to include reasoning tokens for Google models
+			if (promptTokens !== null) {
+				totalTokens =
+					promptTokens + (completionTokens || 0) + (reasoningTokens || 0);
 			}
 
-			// Extract tool calls from Google format
-			const parts = json.candidates?.[0]?.content?.parts || [];
+			// Extract tool calls from Google format - reuse the same parts array
 			toolResults =
 				parts
 					.filter((part: any) => part.functionCall)
@@ -310,8 +320,9 @@ function parseProviderResponse(usedProvider: Provider, json: any) {
 			totalTokens =
 				json.usage?.total_tokens ||
 				(promptTokens !== null && completionTokens !== null
-					? promptTokens + completionTokens
+					? promptTokens + completionTokens + (reasoningTokens || 0)
 					: null);
+			break;
 	}
 
 	return {
@@ -394,8 +405,11 @@ function estimateTokensFromContent(content: string): number {
 function extractContentFromProvider(data: any, provider: Provider): string {
 	switch (provider) {
 		case "google-vertex":
-		case "google-ai-studio":
-			return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+		case "google-ai-studio": {
+			const parts = data.candidates?.[0]?.content?.parts || [];
+			const contentParts = parts.filter((part: any) => !part.thought);
+			return contentParts.map((part: any) => part.text).join("") || "";
+		}
 		case "anthropic":
 			if (data.type === "content_block_delta" && data.delta?.text) {
 				return data.delta.text;
@@ -416,6 +430,12 @@ function extractReasoningContentFromProvider(
 	provider: Provider,
 ): string {
 	switch (provider) {
+		case "google-vertex":
+		case "google-ai-studio": {
+			const parts = data.candidates?.[0]?.content?.parts || [];
+			const reasoningParts = parts.filter((part: any) => part.thought);
+			return reasoningParts.map((part: any) => part.text).join("") || "";
+		}
 		default: // OpenAI format
 			return data.choices?.[0]?.delta?.reasoning_content || "";
 	}
@@ -502,8 +522,13 @@ function extractTokenUsage(
 			if (data.usageMetadata) {
 				promptTokens = data.usageMetadata.promptTokenCount || null;
 				completionTokens = data.usageMetadata.candidatesTokenCount || null;
-				totalTokens = data.usageMetadata.totalTokenCount || null;
+				// Don't use Google's totalTokenCount as it doesn't include reasoning tokens
 				reasoningTokens = data.usageMetadata.thoughtsTokenCount || null;
+				// Calculate total including reasoning tokens
+				totalTokens =
+					(promptTokens || 0) +
+					(completionTokens || 0) +
+					(reasoningTokens || 0);
 
 				// If candidatesTokenCount is missing and we have content, estimate it
 				if (completionTokens === null && fullContent) {
@@ -886,7 +911,11 @@ function transformStreamingChunkToOpenAIFormat(
 						? {
 								prompt_tokens: data.usageMetadata.promptTokenCount || 0,
 								completion_tokens: data.usageMetadata.candidatesTokenCount || 0,
-								total_tokens: data.usageMetadata.totalTokenCount || 0,
+								// Calculate total including reasoning tokens for Google models
+								total_tokens:
+									(data.usageMetadata.promptTokenCount || 0) +
+									(data.usageMetadata.candidatesTokenCount || 0) +
+									(data.usageMetadata.thoughtsTokenCount || 0),
 								...(data.usageMetadata.thoughtsTokenCount && {
 									reasoning_tokens: data.usageMetadata.thoughtsTokenCount,
 								}),
@@ -916,7 +945,11 @@ function transformStreamingChunkToOpenAIFormat(
 						? {
 								prompt_tokens: data.usageMetadata.promptTokenCount || 0,
 								completion_tokens: data.usageMetadata.candidatesTokenCount || 0,
-								total_tokens: data.usageMetadata.totalTokenCount || 0,
+								// Calculate total including reasoning tokens for Google models
+								total_tokens:
+									(data.usageMetadata.promptTokenCount || 0) +
+									(data.usageMetadata.candidatesTokenCount || 0) +
+									(data.usageMetadata.thoughtsTokenCount || 0),
 								...(data.usageMetadata.thoughtsTokenCount && {
 									reasoning_tokens: data.usageMetadata.thoughtsTokenCount,
 								}),
@@ -2006,6 +2039,11 @@ chat.openapi(completions, async (c) => {
 	const requestCanBeCanceled =
 		providers.find((p) => p.id === usedProvider)?.cancellation === true;
 
+	// Check if the model supports reasoning for Google providers
+	const supportsReasoning = modelInfo.providers.some(
+		(provider) => (provider as any).reasoning === true,
+	);
+
 	const requestBody = prepareRequestBody(
 		usedProvider,
 		usedModel,
@@ -2020,6 +2058,7 @@ chat.openapi(completions, async (c) => {
 		tools,
 		tool_choice,
 		reasoning_effort,
+		supportsReasoning,
 	);
 
 	const startTime = Date.now();
@@ -2595,6 +2634,9 @@ chat.openapi(completions, async (c) => {
 										prompt_tokens: usage.promptTokens,
 										completion_tokens: usage.completionTokens,
 										total_tokens: usage.totalTokens,
+										...(usage.reasoningTokens !== null && {
+											reasoning_tokens: usage.reasoningTokens,
+										}),
 									};
 								}
 							}
@@ -3274,7 +3316,9 @@ chat.openapi(completions, async (c) => {
 		finishReason,
 		calculatedPromptTokens,
 		calculatedCompletionTokens,
-		(calculatedPromptTokens || 0) + (calculatedCompletionTokens || 0),
+		(calculatedPromptTokens || 0) +
+			(calculatedCompletionTokens || 0) +
+			(reasoningTokens || 0),
 		reasoningTokens,
 		cachedTokens,
 		toolResults,
