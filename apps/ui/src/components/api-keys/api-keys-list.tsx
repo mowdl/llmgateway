@@ -507,6 +507,92 @@ export function ApiKeysList({
 								{key.maskedToken}
 							</div>
 						</div>
+						<div className="pt-2 border-t grid grid-cols-2">
+							<div className="py-1">
+								<div className="text-xs text-muted-foreground mb-1">Usage</div>
+								<div className="font-mono text-xs break-all">
+									${Number(key.usage).toFixed(2)}
+								</div>
+							</div>
+							<div>
+								<Dialog>
+									<DialogTrigger asChild>
+										<Button
+											variant="outline"
+											size="sm"
+											className="min-w-32 flex justify-between h-full py-1"
+										>
+											<div className="text-left">
+												<div className="text-xs text-muted-foreground mb-1">
+													Usage Limit
+												</div>
+												<div className="font-mono text-xs break-all">
+													{key.usageLimit
+														? `$${Number(key.usageLimit).toFixed(2)}`
+														: "No limit"}
+												</div>
+											</div>
+											<EditIcon />
+										</Button>
+									</DialogTrigger>
+									<DialogContent>
+										<form
+											onSubmit={(e) => {
+												e.preventDefault();
+												const formData = new FormData(
+													e.target as HTMLFormElement,
+												);
+												const newUsageLimit = formData.get("limit") as
+													| string
+													| null;
+												if (newUsageLimit === key.usageLimit) {
+													return;
+												}
+												if (newUsageLimit === "") {
+													updateKeyUsageLimit(key.id, null);
+												} else {
+													updateKeyUsageLimit(key.id, newUsageLimit);
+												}
+											}}
+										>
+											<DialogHeader>
+												<DialogTitle>Edit key credit limit</DialogTitle>
+												<DialogDescription>
+													Set a credit limit for this key. When key usage is
+													past this limit, requests using this key will return
+													an error.
+												</DialogDescription>
+											</DialogHeader>
+											<div className="grid gap-3 pt-8">
+												<Label htmlFor="limit">
+													Usage Limit (leave empty for no limit)
+												</Label>
+												<Input
+													id="limit"
+													name="limit"
+													defaultValue={
+														key.usageLimit ? Number(key.usageLimit) : ""
+													}
+													type="number"
+												/>
+												<div className="text-muted-foreground text-sm">
+													Usage includes both usage from LLM Gateway credits and
+													usage from your own provider keys when applicable.
+												</div>
+											</div>
+											<DialogFooter className="pt-8">
+												<DialogClose asChild>
+													<Button variant="outline">Cancel</Button>
+												</DialogClose>
+												<DialogClose asChild>
+													<Button type="submit">Save changes</Button>
+												</DialogClose>
+											</DialogFooter>
+										</form>
+									</DialogContent>
+								</Dialog>
+							</div>
+						</div>
 					</div>
 				))}
 			</div>
