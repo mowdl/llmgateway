@@ -1,6 +1,6 @@
 {
-  "id": "68f12895-811c-465d-89e8-dd8290c0db9d",
-  "prevId": "49fbf59e-ce62-48a3-86ac-08dc83a93bf8",
+  "id": "39060e8e-3cd9-4331-b0fd-1ec266eea585",
+  "prevId": "93febaca-5efc-42d7-acf7-502450983d6b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1217,7 +1217,7 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'credits'"
+          "default": "'hybrid'"
         },
         "status": {
           "name": "status",
