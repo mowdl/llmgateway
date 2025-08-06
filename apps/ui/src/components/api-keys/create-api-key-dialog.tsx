@@ -4,6 +4,7 @@ import { usePostHog } from "posthog-js/react";
 import { useState } from "react";
 
 import { Button } from "@/lib/components/button";
+import { Checkbox } from "@/lib/components/checkbox";
 import {
 	Dialog,
 	DialogContent,
@@ -35,7 +36,8 @@ export function CreateApiKeyDialog({
 	const [open, setOpen] = useState(false);
 	const [step, setStep] = useState<"form" | "created">("form");
 	const [name, setName] = useState("");
-	const [limit, setLimit] = useState<string>("");
+	const [limit, setLimit] = useState<string>("0");
+	const [limitChecked, setLimitChecked] = useState<boolean>(false);
 	const [apiKey, setApiKey] = useState("");
 	const api = useApi();
 
@@ -53,7 +55,7 @@ export function CreateApiKeyDialog({
 				body: {
 					description: name.trim(),
 					projectId: selectedProject.id,
-					usageLimit: limit === "" ? null : limit,
+					usageLimit: limitChecked ? limit : null,
 				},
 			},
 			{
@@ -126,18 +128,42 @@ export function CreateApiKeyDialog({
 								/>
 							</div>
 							<div className="space-y-2">
-								<Label htmlFor="limit">API Key Usage Limit</Label>
-								<div className="text-muted-foreground text-sm">
+								<div className="flex items-center gap-2">
+									<Checkbox
+										id="limit-checkbox"
+										checked={limitChecked}
+										onCheckedChange={(v) => {
+											if (v !== "indeterminate") {
+												setLimitChecked(v);
+											}
+										}}
+									/>
+									<Label htmlFor="limit-checkbox">
+										Set API Key Usage Limit
+									</Label>
+								</div>
+								<div
+									className={`text-muted-foreground text-sm ${limitChecked ? "block" : "hidden"}`}
+								>
 									Usage includes both usage from LLM Gateway credits and usage
 									from your own provider keys when applicable.
 								</div>
-								<Input
-									id="limit"
-									placeholder="Leave empty for no usage limit"
-									value={limit}
-									onChange={(e) => setLimit(e.target.value)}
-									type="number"
-								/>
+								<div
+									className={`relative ${limitChecked ? "block" : "hidden"}`}
+								>
+									<span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+										$
+									</span>
+									<Input
+										className="pl-6"
+										id="limit"
+										value={limit}
+										onChange={(e) => setLimit(e.target.value)}
+										type="number"
+										min={0}
+										required={limitChecked}
+									/>
+								</div>
 							</div>
 							<DialogFooter>
 								<Button type="button" variant="outline" onClick={handleClose}>
