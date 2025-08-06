@@ -349,14 +349,20 @@ export function ApiKeysList({
 													<Label htmlFor="limit">
 														Usage Limit (leave empty for no limit)
 													</Label>
-													<Input
-														id="limit"
-														name="limit"
-														defaultValue={
-															key.usageLimit ? Number(key.usageLimit) : ""
-														}
-														type="number"
-													/>
+													<div className="relative">
+														<span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+															$
+														</span>
+														<Input
+															className="pl-6"
+															id="limit"
+															name="limit"
+															defaultValue={
+																key.usageLimit ? Number(key.usageLimit) : ""
+															}
+															type="number"
+														/>
+													</div>
 													<div className="text-muted-foreground text-sm">
 														Usage includes both usage from LLM Gateway credits
 														and usage from your own provider keys when
@@ -567,14 +573,20 @@ export function ApiKeysList({
 												<Label htmlFor="limit">
 													Usage Limit (leave empty for no limit)
 												</Label>
-												<Input
-													id="limit"
-													name="limit"
-													defaultValue={
-														key.usageLimit ? Number(key.usageLimit) : ""
-													}
-													type="number"
-												/>
+												<div className="relative">
+													<span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+														$
+													</span>
+													<Input
+														className="pl-6"
+														id="limit"
+														name="limit"
+														defaultValue={
+															key.usageLimit ? Number(key.usageLimit) : ""
+														}
+														type="number"
+													/>
+												</div>
 												<div className="text-muted-foreground text-sm">
 													Usage includes both usage from LLM Gateway credits and
 													usage from your own provider keys when applicable.
