@@ -359,7 +359,10 @@ function estimateTokens(
 				// Convert messages to the format expected by gpt-tokenizer
 				const chatMessages: ChatMessage[] = messages.map((m) => ({
 					role: m.role,
-					content: m.content || "",
+					content:
+						typeof m.content === "string"
+							? m.content
+							: JSON.stringify(m.content),
 					name: m.name,
 				}));
 				calculatedPromptTokens = encodeChat(
@@ -368,7 +371,9 @@ function estimateTokens(
 				).length;
 			} catch (error) {
 				// Fallback to simple estimation if encoding fails
-				console.error(`Failed to encode chat messages: ${error}`);
+				console.error(
+					`Failed to encode chat messages in estimate tokens: ${error}`,
+				);
 				calculatedPromptTokens =
 					messages.reduce((acc, m) => acc + (m.content?.length || 0), 0) / 4;
 			}
@@ -612,7 +617,9 @@ function transformToOpenAIFormat(
 						},
 						finish_reason:
 							finishReason === "STOP"
-								? "stop"
+								? toolResults && toolResults.length > 0
+									? "tool_calls"
+									: "stop"
 								: finishReason?.toLowerCase() || "stop",
 					},
 				],
@@ -652,7 +659,9 @@ function transformToOpenAIFormat(
 						finish_reason:
 							finishReason === "end_turn"
 								? "stop"
-								: finishReason?.toLowerCase() || "stop",
+								: finishReason === "tool_use"
+									? "tool_calls"
+									: finishReason?.toLowerCase() || "stop",
 					},
 				],
 				usage: {
@@ -924,6 +933,10 @@ function transformStreamingChunkToOpenAIFormat(
 				};
 			} else if (data.candidates?.[0]?.finishReason) {
 				const finishReason = data.candidates[0].finishReason;
+				// Check if there are function calls in this response
+				const hasFunctionCalls = data.candidates?.[0]?.content?.parts?.some(
+					(part: any) => part.functionCall,
+				);
 				transformedData = {
 					id: data.responseId || `chatcmpl-${Date.now()}`,
 					object: "chat.completion.chunk",
@@ -937,7 +950,9 @@ function transformStreamingChunkToOpenAIFormat(
 							},
 							finish_reason:
 								finishReason === "STOP"
-									? "stop"
+									? hasFunctionCalls
+										? "tool_calls"
+										: "stop"
 									: finishReason?.toLowerCase() || "stop",
 						},
 					],
